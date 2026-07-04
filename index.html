@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>【2026】Japan IPO Tracker & Evaluation</title>
+    <!-- Supabaseの公式ライブラリ（CDN） -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            font-family: "Helvetica Neue", Arial, "Noto Sans JP", sans-serif;
+        }
+        body {
+            margin: 0;
+            padding: 20px;
+            background-color: #f9fafb;
+            color: #333333;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        /* ヘッダーと切り替えボタンの配置 */
+        .header-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        h2 { margin: 0; font-size: 24px; }
+
+        /* 言語切り替えボタンのスタイル */
+        .lang-switch-btn {
+            background-color: #0284c7;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 14px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: background 0.2s;
+        }
+        .lang-switch-btn:hover {
+            background-color: #0369a1;
+        }
+
+        /* 設定エラーメッセージ用 */
+        #config-alert {
+            background-color: #fef2f2;
+            border: 1px solid #fca5a5;
+            color: #991b1b;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            font-weight: bold;
+            display: none;
+        }
+
+        /* 評価基準ガイド */
+        .rating-guide {
+            background-color: #ffffff;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 25px;
+            font-size: 13px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+        .rating-guide h3 { margin: 0 0 10px 0; font-size: 14px; color: #111827; }
+        .rating-guide ul {
+            margin: 0; padding-left: 20px;
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 5px;
+        }
+
+        /* 月ごとのセクションヘッダー */
+        .month-header {
+            font-size: 18px; font-weight: 700; color: #ffffff;
+            background-color: #0284c7; padding: 10px 16px;
+            border-radius: 6px 6px 0 0; margin-top: 30px; margin-bottom: 0;
+        }
+
+        /* テーブル構造 */
+        .table-responsive {
+            overflow-x: auto; background: white;
+            border: 1px solid #e5e7eb; border-radius: 0 0 6px 6px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05); margin-bottom: 20px;
+        }
+        
+        table.ipo-table { width: 100%; border-collapse: collapse; text-align: center; font-size: 13px; min-width: 1050px; }
+        table.ipo-table th { background-color: #f3f4f6; color: #374151; font-weight: 600; padding: 12px 6px; border-bottom: 2px solid #e5e7eb; border-right: 1px solid #e5e7eb; }
+        table.ipo-table th:last-child { border-right: none; }
+        table.ipo-table td { padding: 12px 6px; border-bottom: 1px solid #e5e7eb; border-right: 1px solid #e5e7eb; vertical-align: middle; }
+        table.ipo-table td:last-child { border-right: none; }
+        table.ipo-table tr:hover { background-color: #f9fafb; }
+
+        .company-name-cell { font-weight: bold; color: #0284c7; }
+        .company-code { font-size: 11px; color: #6b7280; display: block; margin-top: 2px; }
+
+        /* S〜Dランクバッジ */
+        .rank-badge { display: inline-block; width: 26px; height: 26px; line-height: 26px; border-radius: 50%; font-weight: bold; color: white; font-size: 13px; }
+        .rank-S { background-color: #ef4444; }
+        .rank-A { background-color: #f97316; }
+        .rank-B { background-color: #eab308; }
+        .rank-C { background-color: #22c55e; }
+        .rank-D { background-color: #6b7280; }
+
+        .price-text { font-weight: 600; }
+        .result-plus { color: #ef4444; font-weight: bold; }
+        .result-minus { color: #3b82f6; font-weight: bold; }
+        
+        .broker-tag { display: inline-block; padding: 2px 4px; background-color: #f3f4f6; border: 1px solid #d1d5db; border-radius: 3px; font-size: 11px; margin: 1px; color: #4b5563; }
+        .broker-lead { background-color: #fee2e2; border-color: #fca5a5; color: #b91c1c; font-weight: bold; }
+        
+        .loading { padding: 20px; text-align: center; color: #6b7280; font-style: italic; }
+        .footer { margin-top: 40px; text-align: center; font-size: 12px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 20px; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <!-- ヘッダーと切り替えボタン -->
+        <div class="header-container">
+            <h2 id="page-title">【2026年版】IPO企業情報・評価一覧表</h2>
+            <button class="lang-switch-btn" id="lang-btn" onclick="toggleLanguage()">English</button>
+        </div>
+
+        <div id="config-alert">⚠️ Please configure your Supabase URL and Anon Key at the bottom of the HTML file.</div>
+
+        <!-- 評価解説（多言語対応） -->
+        <div class="rating-guide" id="rating-guide-box">
+            <!-- JavaScriptで言語に応じて自動注入されます -->
+        </div>
+
+        <!-- メインデータテーブルの受け皿 -->
+        <div id="ipo-sections-container">
+            <div class="loading">データベースから最新情報を読み込んでいます... (Loading latest data...)</div>
+        </div>
+
+        <div class="footer" id="footer-text">
+            Data Source: Japan Exchange Group (JPX) New Listings Information
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // ⚠️ 設定データ
+        // ==========================================
+        const SUPABASE_URL = "https://lcyvnlxoygdouvvcjxuu.supabase.co"; 
+        const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxjeXZubHhveWdkb3V2dmNqeHV1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMxNjU3NjAsImV4cCI6MjA5ODc0MTc2MH0.FQglHl2SPeXcPVx7xoSKCEgNdio-QtPg8RNgrLAsx0o"; 
+
+        let currentLang = 'ja';
+        let ipoDataCache = []; 
+
+        const i18n = {
+            ja: {
+                title: "【2026年版】IPO企業情報・評価一覧表", btn: "English", guideTitle: "【総合評価の基準】",
+                guideS: "S：初値予想が公募比+50万円以上！", guideA: "A：初値予想が公募比+20万〜+50万円！",
+                guideB: "B：初値予想が公募比+10万〜+20万円", guideC: "C：公募割れの可能性が低いIPO",
+                guideD: "D：公募割れの可能性が高いIPO", sectionTitle: "直近の上場・承認企業",
+                thCompany: "企業名", thRating: "総合評価", thMarket: "上場市場", thBB: "申し込み期間",
+                thDate: "上場日", thEstPrice: "想定価格", thCondition: "仮条件", thOfferPrice: "公募価格",
+                thInitPrice: "初値", thBrokers: "狙い目証券", loading: "データベースから最新情報を読み込んでいます...",
+                empty: "現在、登録されているIPO情報はありません。", mainBroker: "主"
+            },
+            en: {
+                title: "【2026】Japan IPO Tracker & Evaluation List", btn: "日本語", guideTitle: "【Overall Rating Criteria】",
+                guideS: "S: Expected gains over +500,000 JPY!", guideA: "A: Expected gains between +200k to +500k JPY!",
+                guideB: "B: Expected gains between +100k to +200k JPY", guideC: "C: Low risk of falling below the offering price",
+                guideD: "D: High risk of falling below the offering price", sectionTitle: "Recent & Upcoming Listed Companies",
+                thCompany: "Company Name", thRating: "Rating", thMarket: "Market", thBB: "Book-Building Period",
+                thDate: "Listing Date", thEstPrice: "Est. Price", thCondition: "Interim Cond.", thOfferPrice: "Offer Price",
+                thInitPrice: "Initial Price", thBrokers: "Lead / Sub Brokers", loading: "Loading latest data from database...",
+                empty: "No IPO data available at the moment.", mainBroker: "Lead"
+            }
+        };
+
+        function updateStaticTexts() {
+            const t = i18n[currentLang];
+            document.getElementById('page-title').innerText = t.title;
+            document.getElementById('lang-btn').innerText = t.btn;
+            
+            document.getElementById('rating-guide-box').innerHTML = `
+                <h3>${t.guideTitle}</h3>
+                <ul>
+                    <li><span style="color:#ef4444; font-weight:bold;">S</span>：${t.guideS}</li>
+                    <li><span style="color:#f97316; font-weight:bold;">A</span>：${t.guideA}</li>
+                    <li><span style="color:#eab308; font-weight:bold;">B</span>：${t.guideB}</li>
+                    <li><span style="color:#22c55e; font-weight:bold;">C</span>：${t.guideC}</li>
+                    <li><span style="color:#6b7280; font-weight:bold;">D</span>：${t.guideD}</li>
+                </ul>
+            `;
+        }
+
+        function renderTable() {
+            const t = i18n[currentLang];
+            const container = document.getElementById('ipo-sections-container');
+            
+            if (ipoDataCache.length === 0) {
+                container.innerHTML = `<div class="loading">${t.empty}</div>`;
+                return;
+            }
+
+            let tableHtml = `
+                <div class="month-header">${t.sectionTitle}</div>
+                <div class="table-responsive">
+                    <table class="ipo-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 15%;">${t.thCompany}</th>
+                                <th style="width: 7%;">${t.thRating}</th>
+                                <th style="width: 9%;">${t.thMarket}</th>
+                                <th style="width: 12%;">${t.thBB}</th>
+                                <th style="width: 8%;">${t.thDate}</th>
+                                <th style="width: 8%;">${t.thEstPrice}</th>
+                                <th style="width: 9%;">${t.thCondition}</th>
+                                <th style="width: 8%;">${t.thOfferPrice}</th>
+                                <th style="width: 9%;">${t.thInitPrice}</th>
+                                <th style="width: 15%;">${t.thBrokers}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+
+            ipoDataCache.forEach(item => {
+                let brokerTags = `<span class="broker-tag broker-lead">${item.lead_broker || ''}(${t.mainBroker})</span>`;
+                if (item.sub_brokers && Array.isArray(item.sub_brokers)) {
+                    item.sub_brokers.forEach(sub => {
+                        brokerTags += `<span class="broker-tag">${sub}</span>`;
+                    });
+                }
+
+                let marketText = item.market || '-';
+                if (currentLang === 'en') {
+                    marketText = marketText.replace('東証グロース', 'TSE Growth').replace('東証プライム', 'TSE Prime').replace('東証スタンダード', 'TSE Standard');
+                }
+
+                let initialPriceClass = "";
+                if (item.initial_price && item.initial_price.includes('+')) initialPriceClass = "class='result-plus'";
+                if (item.initial_price && item.initial_price.includes('-')) initialPriceClass = "class='result-minus'";
+
+                tableHtml += `
+                    <tr>
+                        <td>
+                            <span class="company-name-cell">${item.company_name}</span>
+                            <span class="company-code">(${item.code})</span>
+                        </td>
+                        <td><span class="rank-badge rank-${item.rating}">${item.rating}</span></td>
+                        <td>${marketText}</td>
+                        <td>${item.bb_period || '-'}</td>
+                        <td>${item.listing_date || '-'}</td>
+                        <td class="price-text">${item.estimated_price || '-'}</td>
+                        <td>${item.interim_condition || '-'}</td>
+                        <td class="price-text">${item.offering_price || '-'}</td>
+                        <td ${initialPriceClass}>${item.initial_price || '-'}</td>
+                        <td>${brokerTags}</td>
+                    </tr>
+                `;
+            });
+
+            tableHtml += `</tbody></table></div>`;
+            container.innerHTML = tableHtml;
+        }
+
+        function toggleLanguage() {
+            currentLang = (currentLang === 'ja') ? 'en' : 'ja';
+            updateStaticTexts();
+            renderTable();
+        }
+
+        // メイン処理（エラーを徹底的にキャッチする構造に変更）
+        async function loadData() {
+            // 先に日本語・英語の枠組みだけは絶対に描写する
+            updateStaticTexts();
+
+            try {
+                // 💡対策：ライブラリが読み込めているか安全確認
+                if (!window.supabase || !window.supabase.createClient) {
+                    throw new Error("Supabaseの通信ライブラリ(CDN)の読み込みに失敗しました。広告ブロック機能（AdBlockなど）がオンになっている場合はオフにしてください。");
+                }
+
+                // 安全にSupabaseクライアントを初期化
+                const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+                const { data, error } = await supabase
+                    .from('ipo_listings')
+                    .select('*')
+                    .order('listing_date', { ascending: true });
+
+                if (error) throw error;
+
+                if (!data || data.length === 0) {
+                    document.getElementById('ipo-sections-container').innerHTML = `
+                        <div style="color:#1e3a8a; background:#eff6ff; padding:20px; border-radius:8px; border:2px solid #3b82f6; text-align:center; font-size:14px;">
+                            <strong>✅ Supabaseとの接続設定は100%成功しています！</strong><br><br>
+                            ただし、テーブル「ipo_listings」の中身が現在<b>空（0件）</b>です。<br>
+                            Supabaseのダッシュボード側でデータを追加すると表示されます。
+                        </div>`;
+                    return;
+                }
+
+                ipoDataCache = data;
+                renderTable();
+            } catch (err) {
+                console.error("Caught error:", err);
+                document.getElementById('ipo-sections-container').innerHTML = `
+                    <div style="color:#b91c1c; background:#fee2e2; padding:20px; border-radius:8px; border:2px solid #ef4444; word-break: break-all; font-size:14px; text-align:left;">
+                        <strong>⚠️ エラーを検知しました：</strong><br><br>
+                        <code>${err.message || JSON.stringify(err)}</code>
+                    </div>`;
+            }
+        }
+
+        // 実行開始
+        loadData();
+    </script>
+</body>
+</html>
