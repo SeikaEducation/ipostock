@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -31,8 +31,8 @@
         }
         h2 { margin: 0; font-size: 24px; }
 
-        /* 言語切り替えボタンのスタイル */
-        .lang-switch-btn {
+        /* 言語切り替えプルダウンのスタイル */
+        .lang-select {
             background-color: #0284c7;
             color: white;
             border: none;
@@ -42,10 +42,20 @@
             font-weight: bold;
             font-size: 14px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            transition: background 0.2s;
+            outline: none;
+            appearance: none; /* デフォルトの矢印を消す */
+            -webkit-appearance: none;
+            background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='white' viewBox='0 0 24 24'><path d='M7 10l5 5 5-5z'/></svg>");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            padding-right: 32px;
         }
-        .lang-switch-btn:hover {
+        .lang-select:hover {
             background-color: #0369a1;
+        }
+        .lang-select option {
+            color: #333333;
+            background-color: white;
         }
 
         /* 設定エラーメッセージ用 */
@@ -122,22 +132,23 @@
 <body>
 
     <div class="container">
-        <!-- ヘッダーと切り替えボタン -->
+        <!-- ヘッダーと切り替えプルダウン -->
         <div class="header-container">
-            <h2 id="page-title">【2026年版】IPO企業情報・評価一覧表</h2>
-            <button class="lang-switch-btn" id="lang-btn" onclick="toggleLanguage()">English</button>
+            <h2 id="page-title">【2026】Japan IPO Tracker & Evaluation List</h2>
+            <select class="lang-select" id="lang-select" onchange="changeLanguage(this.value)">
+                <option value="en" selected>English</option>
+                <option value="ja">日本語</option>
+            </select>
         </div>
 
         <div id="config-alert">⚠️ Please configure your Supabase URL and Anon Key at the bottom of the HTML file.</div>
 
-        <!-- 評価解説（多言語対応） -->
-        <div class="rating-guide" id="rating-guide-box">
-            <!-- JavaScriptで言語に応じて自動注入されます -->
-        </div>
+        <!-- 評価解説 -->
+        <div class="rating-guide" id="rating-guide-box"></div>
 
-        <!-- メインデータテーブルの受け皿 -->
+        <!-- メインデータテーブル -->
         <div id="ipo-sections-container">
-            <div class="loading">データベースから最新情報を読み込んでいます... (Loading latest data...)</div>
+            <div class="loading">Loading latest data from database...</div>
         </div>
 
         <div class="footer" id="footer-text">
@@ -147,17 +158,18 @@
 
     <script>
         // ==========================================
-        // ⚠️ 設定データ
+        // 設定データ
         // ==========================================
         const SUPABASE_URL = "https://lcyvnlxoygdouvvcjxuu.supabase.co"; 
         const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxjeXZubHhveWdkb3V2dmNqeHV1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMxNjU3NjAsImV4cCI6MjA5ODc0MTc2MH0.FQglHl2SPeXcPVx7xoSKCEgNdio-QtPg8RNgrLAsx0o"; 
 
-        let currentLang = 'ja';
+        // 💡 デフォルト言語を 'en' に変更
+        let currentLang = 'en';
         let ipoDataCache = []; 
 
         const i18n = {
             ja: {
-                title: "【2026年版】IPO企業情報・評価一覧表", btn: "English", guideTitle: "【総合評価の基準】",
+                title: "【2026年版】IPO企業情報・評価一覧表", guideTitle: "【総合評価の基準】",
                 guideS: "S：初値予想が公募比+50万円以上！", guideA: "A：初値予想が公募比+20万〜+50万円！",
                 guideB: "B：初値予想が公募比+10万〜+20万円", guideC: "C：公募割れの可能性が低いIPO",
                 guideD: "D：公募割れの可能性が高いIPO", sectionTitle: "直近の上場・承認企業",
@@ -167,7 +179,7 @@
                 empty: "現在、登録されているIPO情報はありません。", mainBroker: "主"
             },
             en: {
-                title: "【2026】Japan IPO Tracker & Evaluation List", btn: "日本語", guideTitle: "【Overall Rating Criteria】",
+                title: "【2026】Japan IPO Tracker & Evaluation List", guideTitle: "【Overall Rating Criteria】",
                 guideS: "S: Expected gains over +500,000 JPY!", guideA: "A: Expected gains between +200k to +500k JPY!",
                 guideB: "B: Expected gains between +100k to +200k JPY", guideC: "C: Low risk of falling below the offering price",
                 guideD: "D: High risk of falling below the offering price", sectionTitle: "Recent & Upcoming Listed Companies",
@@ -181,7 +193,6 @@
         function updateStaticTexts() {
             const t = i18n[currentLang];
             document.getElementById('page-title').innerText = t.title;
-            document.getElementById('lang-btn').innerText = t.btn;
             
             document.getElementById('rating-guide-box').innerHTML = `
                 <h3>${t.guideTitle}</h3>
@@ -235,7 +246,7 @@
 
                 let marketText = item.market || '-';
                 if (currentLang === 'en') {
-                    marketText = marketText.replace('東証グロース', 'TSE Growth').replace('東証プライム', 'TSE Prime').replace('東証スタンダード', 'TSE Standard');
+                    marketText = marketText.replace('東証グロース', 'TSE Growth').replace('東証プライム', 'TSE Prime').replace('東証スタンダード', 'TSE Standard').replace('東証インフラ', 'TSE Infrastructure');
                 }
 
                 let initialPriceClass = "";
@@ -265,42 +276,29 @@
             container.innerHTML = tableHtml;
         }
 
-        function toggleLanguage() {
-            currentLang = (currentLang === 'ja') ? 'en' : 'ja';
+        // 💡 プルダウン変更時の処理
+        function changeLanguage(lang) {
+            currentLang = lang;
             updateStaticTexts();
             renderTable();
         }
 
-        // メイン処理（エラーを徹底的にキャッチする構造に変更）
         async function loadData() {
-            // 先に日本語・英語の枠組みだけは絶対に描写する
             updateStaticTexts();
 
             try {
-                // 💡対策：ライブラリが読み込めているか安全確認
                 if (!window.supabase || !window.supabase.createClient) {
-                    throw new Error("Supabaseの通信ライブラリ(CDN)の読み込みに失敗しました。広告ブロック機能（AdBlockなど）がオンになっている場合はオフにしてください。");
+                    throw new Error("Failed to load Supabase library. If you use AdBlock, please disable it for this site.");
                 }
 
-                // 安全にSupabaseクライアントを初期化
                 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
                 const { data, error } = await supabase
                     .from('ipo_listings')
                     .select('*')
-                    .order('listing_date', { ascending: true });
+                    .order('listing_date', { ascending: false }); // 直近が上に来るように降順に変更
 
                 if (error) throw error;
-
-                if (!data || data.length === 0) {
-                    document.getElementById('ipo-sections-container').innerHTML = `
-                        <div style="color:#1e3a8a; background:#eff6ff; padding:20px; border-radius:8px; border:2px solid #3b82f6; text-align:center; font-size:14px;">
-                            <strong>✅ Supabaseとの接続設定は100%成功しています！</strong><br><br>
-                            ただし、テーブル「ipo_listings」の中身が現在<b>空（0件）</b>です。<br>
-                            Supabaseのダッシュボード側でデータを追加すると表示されます。
-                        </div>`;
-                    return;
-                }
 
                 ipoDataCache = data;
                 renderTable();
@@ -308,13 +306,13 @@
                 console.error("Caught error:", err);
                 document.getElementById('ipo-sections-container').innerHTML = `
                     <div style="color:#b91c1c; background:#fee2e2; padding:20px; border-radius:8px; border:2px solid #ef4444; word-break: break-all; font-size:14px; text-align:left;">
-                        <strong>⚠️ エラーを検知しました：</strong><br><br>
+                        <strong>⚠️ Error detected:</strong><br><br>
                         <code>${err.message || JSON.stringify(err)}</code>
                     </div>`;
             }
         }
 
-        // 実行開始
+        // 初期実行
         loadData();
     </script>
 </body>
