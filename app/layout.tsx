@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -25,6 +26,16 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`}>
+      <head>
+        {/* Google AdSense */}
+        <Script
+          async
+          strategy="afterInteractive"
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3640445628567917"
+          crossOrigin="anonymous"
+        />
+      </head>
+
       <body>{children}</body>
     </html>
   );
